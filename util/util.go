@@ -18,6 +18,7 @@ package util
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
@@ -201,6 +202,11 @@ func CreateToken(csp bccsp.BCCSP, cert []byte, key bccsp.Key, method, uri string
 		if err != nil {
 			return "", err
 		}
+	case *rsa.PublicKey:
+		token, err = GenECDSAToken(csp, cert, key, method, uri, body)
+		if err != nil {
+			return "", err
+		}
 	}
 	return token, nil
 }
@@ -246,7 +252,7 @@ func genECDSAToken(csp bccsp.BCCSP, key bccsp.Key, b64cert, payload string) (str
 		return "", errors.WithMessage(digestError, fmt.Sprintf("Hash failed on '%s'", payload))
 	}
 
-	ecSignature, err := csp.Sign(key, digest, nil)
+	ecSignature, err := csp.Sign(key, digest, crypto.SHA256)
 	if err != nil {
 		return "", errors.WithMessage(err, "BCCSP signature generation failure")
 	}
@@ -303,7 +309,7 @@ func VerifyToken(csp bccsp.BCCSP, token string, method, uri string, body []byte,
 		if digestError != nil {
 			return nil, errors.WithMessage(digestError, "Message digest failed")
 		}
-		valid, validErr = csp.Verify(pk2, sig, digest, nil)
+		valid, validErr = csp.Verify(pk2, sig, digest, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256})
 	}
 
 	if validErr != nil {
